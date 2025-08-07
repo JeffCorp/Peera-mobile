@@ -1,28 +1,38 @@
-import { Tabs } from 'expo-router';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
-import TabBarIcon from '../../src/components/navigation/TabBarIcon';
+import TabBarIcon from '../components/navigation/TabBarIcon';
+import { MainTabParamList } from '../types/navigation';
 
-export default function TabLayout() {
+// Import screens (we'll create these next)
+import { CalendarScreen } from '../screens/main/CalendarScreen';
+import ExpensesScreen from '../screens/main/ExpensesScreen';
+import HomeScreen from '../screens/main/HomeScreen';
+import { ProfileScreen } from '../screens/main/ProfileScreen';
+import VoiceScreen from '../screens/main/VoiceScreen';
+
+const Tab = createBottomTabNavigator<MainTabParamList>();
+
+const MainTabNavigator: React.FC = () => {
   return (
-    <Tabs
+    <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: string;
 
           switch (route.name) {
-            case 'home':
+            case 'Home':
               iconName = 'home';
               break;
-            case 'calendar':
+            case 'Calendar':
               iconName = 'calendar';
               break;
-            case 'voice':
+            case 'Voice':
               iconName = 'voice';
               break;
-            case 'expenses':
+            case 'Expenses':
               iconName = 'expenses';
               break;
-            case 'profile':
+            case 'Profile':
               iconName = 'profile';
               break;
             default:
@@ -41,25 +51,16 @@ export default function TabLayout() {
         tabBarActiveTintColor: '#6366F1',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          backgroundColor: 'transparent',
           borderTopWidth: 0,
           paddingBottom: 8,
           paddingTop: 8,
           height: 90,
           position: 'absolute',
-          bottom: 20,
-          left: 20,
-          right: 20,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          shadowOpacity: 0.3,
-          shadowRadius: 12,
-          backdropFilter: 'blur(20px)',
-          borderRadius: 25,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          elevation: 0,
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -73,41 +74,43 @@ export default function TabLayout() {
         headerShown: false,
       })}
     >
-      <Tabs.Screen
-        name="home"
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
         options={{
-          // title: 'Home',
           tabBarLabel: 'Home',
         }}
       />
-      <Tabs.Screen
-        name="calendar"
+      <Tab.Screen
+        name="Calendar"
+        component={CalendarScreen}
         options={{
-          // title: 'Calendar',
           tabBarLabel: 'Calendar',
         }}
       />
-      <Tabs.Screen
-        name="voice"
+      <Tab.Screen
+        name="Voice"
+        component={VoiceScreen}
         options={{
-          // title: 'Voice',
           tabBarLabel: 'Voice',
         }}
       />
-      <Tabs.Screen
-        name="expenses"
+      <Tab.Screen
+        name="Expenses"
+        component={ExpensesScreen}
         options={{
-          // title: 'Expenses',
           tabBarLabel: 'Expenses',
         }}
       />
-      <Tabs.Screen
-        name="profile"
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
         options={{
-          // title: 'Profile',
           tabBarLabel: 'Profile',
         }}
       />
-    </Tabs>
+    </Tab.Navigator>
   );
-}
+};
+
+export default MainTabNavigator; 
