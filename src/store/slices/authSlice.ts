@@ -57,7 +57,10 @@ export const register = createAsyncThunk(
   "auth/register",
   async (userData: RegisterData, { rejectWithValue }) => {
     try {
+      console.log("Register user data => ", userData);
       const result = await authService.register(userData);
+
+      console.log("Register result => ", result);
 
       if (result.success && result.data) {
         return {

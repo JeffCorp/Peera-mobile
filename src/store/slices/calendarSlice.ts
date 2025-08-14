@@ -65,10 +65,9 @@ export const fetchEvents = createAsyncThunk(
         });
         url = `${url}?${params}` as any;
       }
-
       const response = await apiClient.get(url);
 
-      console.log("response.data => ", response);
+      console.log("Events DATA => ", response);
       console.log("url => ", url);
       return response.data;
     } catch (error: any) {

@@ -90,7 +90,7 @@ export const ProfileScreen: React.FC = () => {
                 <Ionicons name="person" size={32} color="#FFFFFF" style={styles.titleIcon} />
                 <Text style={styles.title}>Profile</Text>
               </View>
-              <Text style={styles.subtitle}>Your AI assistant account</Text>
+              <Text style={styles.subtitle}>Your intelligent account</Text>
             </View>
 
             <View style={styles.profileSection}>
@@ -109,7 +109,7 @@ export const ProfileScreen: React.FC = () => {
               <View style={styles.userInfo}>
                 <Text style={styles.userName}>{user?.fullName || 'User'}</Text>
                 <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
-                <Text style={styles.userStatus}>AI Assistant Active</Text>
+                <Text style={styles.userStatus}>Intelligent Assistant Active</Text>
               </View>
             </View>
 

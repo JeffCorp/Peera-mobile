@@ -1,5 +1,5 @@
 import { CalendarEventList } from '@/components/calendar/CalendarEventList';
-import useNotifications from '@/hooks/useNotifications';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -18,6 +18,7 @@ import { Calendar, DateData } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AddEventForm } from '../../components/calendar/AddEventForm';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
+import { useEventNotifications } from '../../hooks/useEventNotifications';
 import { useAppDispatch, useAppSelector } from '../../store';
 import {
   CalendarEvent,
@@ -31,7 +32,7 @@ import { endOfMonth, formatDate, startOfMonth } from '../../utils/dateTime';
 
 export const CalendarScreen: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { events = [], isLoading = false, error = null } = useAppSelector(state => state.calendar);
+  const { events = [], isLoading = false } = useAppSelector(state => state.calendar);
   const { user } = useAppSelector(state => state.auth);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -41,6 +42,9 @@ export const CalendarScreen: React.FC = () => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
   const { sendLocalNotification } = useNotifications();
+
+  // Use the new event notifications hook
+  const { scheduledCount } = useEventNotifications({ events });
 
   // Animate on mount
   useEffect(() => {
@@ -56,7 +60,9 @@ export const CalendarScreen: React.FC = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
+
+
 
   // Function to load events for current month
   const loadCurrentMonthEvents = useCallback(async () => {
@@ -65,12 +71,21 @@ export const CalendarScreen: React.FC = () => {
 
     try {
       console.log("Loading current month events...");
-      await dispatch(fetchEvents({
+      console.log("Date range:", {
+        start: start.toISOString(),
+        end: end.toISOString()
+      });
+
+      const result = await dispatch(fetchEvents({
         startTime: start.toISOString(),
         endTime: end.toISOString(),
       })).unwrap();
+
+      console.log("Events loaded successfully:", result?.length || 0, "events");
     } catch (error) {
       console.error('Failed to load events:', error);
+      // Don't rethrow the error to prevent blocking the UI
+      console.warn('Calendar will display without events data');
     }
   }, [dispatch]);
 
@@ -78,61 +93,97 @@ export const CalendarScreen: React.FC = () => {
   useFocusEffect(
     useCallback(() => {
       console.log("CalendarScreen focused - refetching events");
-      loadCurrentMonthEvents();
+      // Add timeout to prevent blocking UI
+      const timeoutId = setTimeout(() => {
+        loadCurrentMonthEvents().catch(error => {
+          console.warn('Focus effect event loading failed:', error);
+        });
+      }, 100);
+
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }, [loadCurrentMonthEvents])
   );
 
   // Update marked dates when events change
   useEffect(() => {
-    const marked: { [key: string]: any } = {};
+    try {
+      const marked: { [key: string]: any } = {};
 
-    if (events && Array.isArray(events)) {
-      events.forEach(event => {
-        if (event) {
-          const startTime = new Date(event?.startTime);
+      if (events && Array.isArray(events)) {
+        events.forEach(event => {
+          if (event && event.startTime) {
+            try {
+              const startTime = new Date(event.startTime);
+              const dateKey = startTime.toISOString().split('T')[0];
 
-          const dateKey = startTime ? startTime?.toISOString().split('T')[0] : "";
-
-          if (!marked[dateKey]) {
-            marked[dateKey] = {
-              marked: true,
-              dotColor: event.color || '#6366F1',
-            };
+              if (dateKey && !marked[dateKey]) {
+                marked[dateKey] = {
+                  marked: true,
+                  dotColor: event.color || '#6366F1',
+                };
+              }
+            } catch (dateError) {
+              console.warn('Invalid date for event:', event.id, dateError);
+            }
           }
+        });
+      }
+
+      // Mark today
+      const today = new Date().toISOString().split('T')[0];
+      if (marked[today]) {
+        marked[today].selected = true;
+        marked[today].selectedColor = '#6366F1';
+      } else {
+        marked[today] = {
+          selected: true,
+          selectedColor: '#6366F1',
+        };
+      }
+
+      setMarkedDates(marked);
+    } catch (error) {
+      console.error('Error updating marked dates:', error);
+      // Set fallback with just today marked
+      setMarkedDates({
+        [new Date().toISOString().split('T')[0]]: {
+          selected: true,
+          selectedColor: '#6366F1',
         }
       });
     }
-
-    // Mark today
-    const today = new Date().toISOString().split('T')[0];
-    if (marked[today]) {
-      marked[today].selected = true;
-      marked[today].selectedColor = '#6366F1';
-    } else {
-      marked[today] = {
-        selected: true,
-        selectedColor: '#6366F1',
-      };
-    }
-
-    setMarkedDates(marked);
   }, [events]);
 
   // Update selected date events when selected date changes
   useEffect(() => {
-    if (selectedDate) {
-      const selectedDateObj = new Date(selectedDate);
-      const filteredEvents = events && Array.isArray(events) ? events.filter(event => {
-        if (event) {
-          const eventDate = new Date(event.startTime);
-          return (
-            eventDate.getFullYear() === selectedDateObj.getFullYear() &&
-            eventDate.getMonth() === selectedDateObj.getMonth() &&
-            eventDate.getDate() === selectedDateObj.getDate()
-          );
-        }
-      }) : [];
-      setSelectedDateEvents(filteredEvents);
+    try {
+      if (selectedDate) {
+        const selectedDateObj = new Date(selectedDate);
+        const filteredEvents = events && Array.isArray(events) ? events.filter(event => {
+          if (event && event.startTime) {
+            try {
+              const eventDate = new Date(event.startTime);
+              return (
+                eventDate.getFullYear() === selectedDateObj.getFullYear() &&
+                eventDate.getMonth() === selectedDateObj.getMonth() &&
+                eventDate.getDate() === selectedDateObj.getDate()
+              );
+            } catch (dateError) {
+              console.warn('Invalid date for event filtering:', event.id, dateError);
+              return false;
+            }
+          }
+          return false;
+        }) : [];
+        setSelectedDateEvents(filteredEvents);
+      } else {
+        setSelectedDateEvents([]);
+      }
+    } catch (error) {
+      console.error('Error filtering selected date events:', error);
+      setSelectedDateEvents([]);
     }
   }, [selectedDate, events]);
 
@@ -230,8 +281,9 @@ export const CalendarScreen: React.FC = () => {
     textDayHeaderFontSize: 14,
   };
 
-  // Only show loading screen on initial load when no events exist
-  if (isLoading && (!events || events.length === 0)) {
+  // Only show loading screen on very first load - be much more restrictive
+  const shouldShowLoading = false; // Disable loading screen for now to prevent blocking
+  if (shouldShowLoading) {
     console.log("Showing loading screen - isLoading:", isLoading, "events length:", events?.length);
     return <LoadingScreen message="Loading calendar..." />;
   }
@@ -267,7 +319,10 @@ export const CalendarScreen: React.FC = () => {
                 <Ionicons name="calendar" size={28} color="#FFFFFF" style={styles.titleIcon} />
                 <Text style={styles.title}>Calendar</Text>
               </View>
-              <Text style={styles.subtitle}>Intelligent event management</Text>
+              <Text style={styles.subtitle}>
+                Intelligent event management
+                {scheduledCount > 0 && ` • ${scheduledCount} notifications scheduled`}
+              </Text>
             </View>
             <View style={styles.headerButtons}>
               <TouchableOpacity

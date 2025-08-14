@@ -27,7 +27,6 @@ class NotificationService {
     // Configure how notifications are displayed when app is in foreground
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
         shouldShowBanner: true,
@@ -285,6 +284,77 @@ class NotificationService {
       console.error("Error scheduling event reminder:", error);
       return [];
     }
+  }
+
+  /**
+   * Schedule multiple event reminders in batch
+   */
+  async scheduleEventRemindersBatch(
+    events: {
+      id: string;
+      title: string;
+      startTime: string;
+    }[],
+    reminderMinutes: number = 15
+  ): Promise<{ [eventId: string]: string[] }> {
+    const results: { [eventId: string]: string[] } = {};
+    const now = new Date();
+
+    for (const event of events) {
+      const eventDate = new Date(event.startTime);
+
+      // Only schedule if the event is in the future
+      if (eventDate.getTime() > now.getTime()) {
+        const notifications: string[] = [];
+
+        try {
+          // Schedule reminder before the event
+          const reminderDate = new Date(
+            eventDate.getTime() - reminderMinutes * 60 * 1000
+          );
+
+          if (reminderDate.getTime() > now.getTime()) {
+            const reminderId = await this.scheduleReminder(
+              `Upcoming: ${event.title}`,
+              `Your event starts in ${reminderMinutes} minutes`,
+              reminderDate,
+              { eventId: event.id, type: "reminder" }
+            );
+            if (reminderId) notifications.push(reminderId);
+          }
+
+          // Schedule notification at event time
+          const startId = await this.scheduleReminder(
+            event.title,
+            "Your event is starting now",
+            eventDate,
+            { eventId: event.id, type: "start" }
+          );
+          if (startId) notifications.push(startId);
+
+          results[event.id] = notifications;
+        } catch (error) {
+          console.error(
+            "Failed to schedule notifications for event:",
+            event.id,
+            error
+          );
+          results[event.id] = [];
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Cancel notifications for multiple events
+   */
+  async cancelEventNotifications(eventIds: string[]): Promise<void> {
+    const promises = eventIds.map((eventId) =>
+      this.cancelNotification(eventId)
+    );
+    await Promise.allSettled(promises);
   }
 
   /**

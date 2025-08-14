@@ -1,3 +1,4 @@
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -51,28 +52,28 @@ const VoiceScreen: React.FC = () => {
       id: '1',
       text: 'Schedule a meeting',
       description: 'Create a new calendar event',
-      icon: '📅',
+      icon: 'calendar',
       color: '#6366F1',
     },
     {
       id: '2',
       text: 'Add expense',
       description: 'Log a new expense',
-      icon: '💰',
+      icon: 'dollar-sign',
       color: '#8B5CF6',
     },
     {
       id: '3',
       text: 'Show my calendar',
       description: 'View today\'s events',
-      icon: '📋',
+      icon: 'list',
       color: '#EC4899',
     },
     {
       id: '4',
       text: 'Call assistant',
       description: 'Get AI assistance',
-      icon: '🤖',
+      icon: 'mic',
       color: '#10B981',
     },
   ];
@@ -174,7 +175,7 @@ const VoiceScreen: React.FC = () => {
       setTranscription(transcriptionResult.text || '');
 
       // Process with AI
-      const aiResponse = await voiceService.processVoiceCommand(transcriptionResult);
+      const aiResponse = await voiceService.processVoiceCommand(transcriptionResult.text || '');
       setAiResponse(aiResponse.response || '');
 
       // Add to recent commands
@@ -221,7 +222,7 @@ const VoiceScreen: React.FC = () => {
       setTranscription(transcriptionResult.text || '');
 
       // Process with AI
-      const aiResponse = await voiceService.processVoiceCommand(transcriptionResult);
+      const aiResponse = await voiceService.processVoiceCommand(transcriptionResult.text || '');
       setAiResponse(aiResponse.response || '');
 
       // Add to recent commands
@@ -315,7 +316,7 @@ const VoiceScreen: React.FC = () => {
             <Text style={styles.title}>🎤 Voice Assistant</Text>
             <Text style={styles.subtitle}>AI-powered voice commands</Text>
             <View style={styles.headerIcon}>
-              <Text style={styles.headerIconText}>🤖</Text>
+              <Ionicons name="mic" size={24} color="#6366F1" />
             </View>
           </View>
         </View>
@@ -338,7 +339,7 @@ const VoiceScreen: React.FC = () => {
             ) : !permissions.microphone ? (
               <View style={styles.permissionCard}>
                 <View style={styles.permissionIconContainer}>
-                  <Text style={styles.permissionIcon}>🎤</Text>
+                  <Ionicons name="mic" size={24} color="#EF4444" />
                 </View>
                 <Text style={styles.permissionText}>Microphone access required</Text>
                 <TouchableOpacity
@@ -375,7 +376,15 @@ const VoiceScreen: React.FC = () => {
                   >
                     <View style={styles.commandContent}>
                       <View style={styles.commandIconContainer}>
-                        <Text style={styles.commandIcon}>{command.icon}</Text>
+                        {command.icon === 'dollar-sign' ? (
+                          <FontAwesome5 name="dollar-sign" size={20} color={command.color} />
+                        ) : command.icon === 'calendar' ? (
+                          <Ionicons name="calendar" size={20} color={command.color} />
+                        ) : command.icon === 'list' ? (
+                          <Ionicons name="list" size={20} color={command.color} />
+                        ) : (
+                          <Ionicons name="mic" size={20} color={command.color} />
+                        )}
                       </View>
                       <View style={styles.commandTextContainer}>
                         <Text style={styles.commandText}>{command.text}</Text>
@@ -419,7 +428,7 @@ const VoiceScreen: React.FC = () => {
                           <ActivityIndicator size="large" color="#FFFFFF" />
                         ) : (
                           <Text style={styles.recordButtonText}>
-                            {isRecording ? '⏹️ Stop' : '🎤 Record'}
+                            {isRecording ? 'Stop' : 'Record'}
                           </Text>
                         )}
                       </View>
@@ -469,7 +478,7 @@ const VoiceScreen: React.FC = () => {
                       <ActivityIndicator size="large" color="#FFFFFF" />
                     ) : (
                       <Text style={styles.listenButtonText}>
-                        {isListening ? '⏹️ Stop Listening' : '🎧 Start Listening'}
+                        {isListening ? 'Stop Listening' : 'Start Listening'}
                       </Text>
                     )}
                   </View>
@@ -496,7 +505,7 @@ const VoiceScreen: React.FC = () => {
                         onPress={handlePlayRecording}
                       >
                         <View style={styles.playButtonContent}>
-                          <Text style={styles.playButtonText}>🔊 Play</Text>
+                          <Text style={styles.playButtonText}>Play</Text>
                         </View>
                       </TouchableOpacity>
                     )}
@@ -520,7 +529,7 @@ const VoiceScreen: React.FC = () => {
                       onPress={() => voiceService.speakText(aiResponse)}
                     >
                       <View style={styles.speakButtonContent}>
-                        <Text style={styles.speakButtonText}>🔊 Speak</Text>
+                        <Text style={styles.speakButtonText}>Speak</Text>
                       </View>
                     </TouchableOpacity>
                   </View>
@@ -539,6 +548,9 @@ const VoiceScreen: React.FC = () => {
                   {recentCommands.map((command) => (
                     <View key={command.id} style={styles.recentCommandCard}>
                       <View style={styles.recentCommandHeader}>
+                        <View style={styles.recentCommandIconContainer}>
+                          <Ionicons name="mic" size={16} color="#6366F1" />
+                        </View>
                         <Text style={styles.recentCommandText}>{command.text}</Text>
                         <Text style={styles.recentCommandTime}>
                           {formatTimeAgo(command.timestamp)}
@@ -556,7 +568,7 @@ const VoiceScreen: React.FC = () => {
             {/* Error Display */}
             {error && (
               <View style={styles.errorCard}>
-                <Text style={styles.errorText}>⚠️ {error}</Text>
+                <Text style={styles.errorText}>Error: {error}</Text>
               </View>
             )}
           </Animated.View>
@@ -645,9 +657,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(99, 102, 241, 0.3)',
   },
-  headerIconText: {
-    fontSize: 24,
-  },
+
   scrollContent: {
     flex: 1,
   },
@@ -673,9 +683,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  permissionIcon: {
-    fontSize: 24,
-  },
+
   permissionText: {
     fontSize: 16,
     color: '#FFFFFF',
@@ -735,9 +743,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
-  commandIcon: {
-    fontSize: 20,
-  },
+
   commandTextContainer: {
     flex: 1,
   },
@@ -949,6 +955,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  recentCommandIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   recentCommandText: {
     fontSize: 16,

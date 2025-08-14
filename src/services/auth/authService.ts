@@ -18,7 +18,7 @@ export interface LoginCredentials {
 }
 
 export interface RegisterData {
-  name: string;
+  fullName: string;
   email: string;
   password: string;
 }
@@ -75,6 +75,8 @@ class AuthService {
         API_ENDPOINTS.REGISTER,
         userData
       );
+
+      console.log("AuthService - Register response:", response);
 
       if (response.success && response.data) {
         // Store tokens and user data
@@ -141,6 +143,8 @@ class AuthService {
   // Get current user profile
   async getProfile(): Promise<AuthResult> {
     try {
+      console.log("Getting  profile");
+
       const response = await apiClient.get<User>(API_ENDPOINTS.PROFILE);
 
       if (response.success && response.data) {
@@ -163,6 +167,7 @@ class AuthService {
         return { success: false, error: "Failed to get profile" };
       }
     } catch (error: any) {
+      console.log("error => ", error.message);
       return {
         success: false,
         error: error.message || "Failed to get profile",
@@ -222,17 +227,22 @@ class AuthService {
       const accessToken = await this.getAccessToken();
       const userData = await this.getUserData();
 
+      console.log("accessToken => ", accessToken);
+      console.log("userData => ", userData);
+
       if (!accessToken || !userData) {
         return { success: false, error: "No stored auth data" };
       }
 
       // Verify token is still valid by getting profile
       const profileResult = await this.getProfile();
+      console.log("profileResult => ", profileResult);
       if (profileResult.success) {
         return profileResult;
       } else {
         // Token might be expired, try to refresh
         const refreshResult = await this.refreshToken();
+        console.log("refreshResult => ", refreshResult);
         if (refreshResult.success) {
           return refreshResult;
         } else {

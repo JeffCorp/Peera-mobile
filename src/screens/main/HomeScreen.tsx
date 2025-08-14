@@ -1,9 +1,10 @@
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Animated,
   Dimensions,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,15 +14,18 @@ import {
 } from 'react-native';
 import { VoiceInput } from '../../components/voice/VoiceInput';
 import { useAuth } from '../../contexts/AuthContext';
+import { expenseService } from '../../services/expenseService';
 import { voiceService } from '../../services/voiceService';
+import { useAppDispatch } from '../../store';
+import { CalendarEvent, fetchEvents } from '../../store/slices/calendarSlice';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
-interface Event {
+interface HomeEvent {
   id: string;
   title: string;
   time: string;
-  location?: string;
+  location?: string | undefined;
   type: 'meeting' | 'call' | 'task';
 }
 
@@ -33,42 +37,155 @@ interface QuickStats {
 
 const HomeScreen: React.FC = () => {
   const { user, logout } = useAuth();
+  const dispatch = useAppDispatch();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isListening, setIsListening] = useState(false);
   const [voiceCommand, setVoiceCommand] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
 
-  // Mock data - replace with real data from your backend
-  const [todayEvents] = useState<Event[]>([
-    {
-      id: '1',
-      title: 'Team Standup',
-      time: '09:00 AM',
-      location: 'Conference Room A',
-      type: 'meeting'
-    },
-    {
-      id: '2',
-      title: 'Client Presentation',
-      time: '02:30 PM',
-      location: 'Virtual Meeting',
-      type: 'call'
-    },
-    {
-      id: '3',
-      title: 'Review Q4 Budget',
-      time: '04:00 PM',
-      location: 'Office',
-      type: 'task'
-    }
-  ]);
-
-  const [quickStats] = useState<QuickStats>({
-    meetingsToday: 3,
-    expensesThisWeek: 1250,
-    totalEvents: 12
+  // Real data state
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [todayEvents, setTodayEvents] = useState<HomeEvent[]>([]);
+  const [realQuickStats, setRealQuickStats] = useState<QuickStats>({
+    meetingsToday: 0,
+    expensesThisWeek: 0,
+    totalEvents: 0
   });
+  const [expensesVisible, setExpensesVisible] = useState(true);
+  const [expensesOpacity] = useState(new Animated.Value(1));
+
+  // Helper function to convert CalendarEvent to HomeEvent
+  const convertToHomeEvent = (calendarEvent: CalendarEvent): HomeEvent => {
+    const startDate = new Date(calendarEvent.startTime); // Use startTime instead of startDate
+    const time = startDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    // Determine event type based on title or description
+    const title = calendarEvent.title.toLowerCase();
+    let type: 'meeting' | 'call' | 'task' = 'meeting';
+    if (title.includes('call') || title.includes('phone')) {
+      type = 'call';
+    } else if (title.includes('task') || title.includes('review') || title.includes('todo')) {
+      type = 'task';
+    }
+
+    return {
+      id: calendarEvent.id,
+      title: calendarEvent.title,
+      time,
+      location: calendarEvent.location || undefined,
+      type
+    };
+  };
+
+  // Load real data from APIs
+  const loadData = useCallback(async () => {
+    try {
+      if (!refreshing) {
+        setLoading(true);
+      }
+
+      console.log('Loading home screen data...');
+      console.log('User:', user?.id);
+
+      // Get today's date range
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+
+      // Fetch today's events and expense stats in parallel
+      const [eventsResult, statsResponse] = await Promise.all([
+        dispatch(fetchEvents({
+          startTime: startOfDay.toISOString(),
+          endTime: endOfDay.toISOString(),
+        })).unwrap(),
+        expenseService.getStats()
+      ]);
+
+      console.log('Today events result:', eventsResult);
+      console.log('Stats response:', statsResponse);
+
+      // Process today's events
+      if (eventsResult && Array.isArray(eventsResult)) {
+        const homeEvents = eventsResult.map(convertToHomeEvent);
+        setTodayEvents(homeEvents);
+      } else {
+        console.warn('No events data returned');
+        setTodayEvents([]);
+      }
+
+      // Process expense stats
+      if (statsResponse) {
+        // Calculate this week's expenses
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Start of current week
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        try {
+          const weeklyStatsResponse = await expenseService.getStats(
+            startOfWeek.toISOString(),
+            now.toISOString()
+          );
+
+          // Update quick stats with real data
+          setRealQuickStats({
+            meetingsToday: eventsResult?.length || 0,
+            expensesThisWeek: weeklyStatsResponse?.totalAmount || 0,
+            totalEvents: eventsResult?.length || 0
+          });
+        } catch (error) {
+          console.error('Error calculating weekly stats:', error);
+          // Fallback to basic stats
+          setRealQuickStats({
+            meetingsToday: eventsResult?.length || 0,
+            expensesThisWeek: statsResponse?.totalAmount || 0,
+            totalEvents: eventsResult?.length || 0
+          });
+        }
+      } else {
+        console.warn('Failed to load expense stats');
+      }
+
+      console.log('Data loading completed');
+    } catch (error) {
+      console.error('Failed to load home screen data:', error);
+      // Set fallback data instead of showing error immediately
+      setTodayEvents([]);
+      setRealQuickStats({
+        meetingsToday: 0,
+        expensesThisWeek: 0,
+        totalEvents: 0
+      });
+
+      // Only show error if it's a critical failure
+      if (!refreshing) {
+        console.warn('Dashboard data loading failed, using fallback data');
+      }
+    } finally {
+      if (!refreshing) {
+        setLoading(false);
+      }
+    }
+  }, [refreshing, dispatch, user?.id]);
+
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+      console.log('Home screen data refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      Alert.alert('Error', 'Failed to refresh data');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadData]);
 
   // Animate on mount
   useEffect(() => {
@@ -84,7 +201,7 @@ const HomeScreen: React.FC = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   // Update time every minute
   useEffect(() => {
@@ -95,9 +212,13 @@ const HomeScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Load data on mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
   const handleVoiceTranscription = async (text: string) => {
     setVoiceCommand(text);
-    const lowerText = text.toLowerCase();
 
     try {
       // Process voice commands with audio feedback
@@ -143,6 +264,17 @@ const HomeScreen: React.FC = () => {
     }
   };
 
+  const toggleExpensesVisibility = () => {
+    // Animate the transition
+    Animated.timing(expensesOpacity, {
+      toValue: expensesVisible ? 0.3 : 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+
+    setExpensesVisible(!expensesVisible);
+  };
+
   const getGreeting = () => {
     const hour = currentTime.getHours();
     if (hour < 12) return 'Good Morning';
@@ -176,6 +308,19 @@ const HomeScreen: React.FC = () => {
   };
 
   console.log("HomeScreen - User:", user);
+
+  // Show loading screen on initial load
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.loadingContainer}>
+        <View style={styles.loadingContent}>
+          <View style={styles.loadingSpinner} />
+          <Text style={styles.loadingText}>Loading dashboard...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -189,7 +334,19 @@ const HomeScreen: React.FC = () => {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#6366F1"
+            colors={["#6366F1"]}
+            progressBackgroundColor="rgba(255, 255, 255, 0.1)"
+          />
+        }
+      >
         <Animated.View
           style={[
             styles.content,
@@ -204,7 +361,7 @@ const HomeScreen: React.FC = () => {
             <View style={styles.greetingContainer}>
               <Text style={styles.greeting}>{getGreeting()},</Text>
               <Text style={styles.userName}>{user?.fullName || 'User'}!</Text>
-              <Text style={styles.welcomeText}>Your AI assistant is ready to help</Text>
+              <Text style={styles.welcomeText}>Perra is ready to help</Text>
             </View>
             <View style={styles.timeContainer}>
               <View style={styles.timeCard}>
@@ -231,30 +388,47 @@ const HomeScreen: React.FC = () => {
           {/* Quick Stats */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Today&apos;s Overview</Text>
+            <View style={[styles.statCard, styles.expensesCard, { marginTop: 10 }]}>
+              <View style={styles.expensesHeader}>
+                <Animated.View style={[styles.expensesContent, { opacity: expensesOpacity }]}>
+                  <Text style={styles.statNumber}>
+                    {expensesVisible
+                      ? `$${loading ? '...' : expenseService.formatCurrency(realQuickStats.expensesThisWeek).replace('$', '')}`
+                      : '••••••'
+                    }
+                  </Text>
+                  <Text style={styles.statLabel}>Expenses</Text>
+                  <Text style={styles.statSubtext}>This Week</Text>
+                </Animated.View>
+                <TouchableOpacity
+                  style={styles.visibilityToggle}
+                  onPress={toggleExpensesVisibility}
+                  accessibilityLabel={expensesVisible ? "Hide expenses" : "Show expenses"}
+                >
+                  <Ionicons
+                    name={expensesVisible ? "eye-outline" : "eye-off-outline"}
+                    size={20}
+                    color="#6366F1"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <View style={styles.statIconContainer}>
                   <Ionicons name="analytics" size={20} color="#6366F1" />
                 </View>
-                <Text style={styles.statNumber}>{quickStats.meetingsToday}</Text>
+                <Text style={styles.statNumber}>{realQuickStats.meetingsToday}</Text>
                 <Text style={styles.statLabel}>Meetings</Text>
                 <Text style={styles.statSubtext}>Today</Text>
               </View>
               <View style={styles.statCard}>
                 <View style={styles.statIconContainer}>
-                  <FontAwesome5 name="dollar-sign" size={20} color="#6366F1" />
-                </View>
-                <Text style={styles.statNumber}>${quickStats.expensesThisWeek}</Text>
-                <Text style={styles.statLabel}>Expenses</Text>
-                <Text style={styles.statSubtext}>This Week</Text>
-              </View>
-              <View style={styles.statCard}>
-                <View style={styles.statIconContainer}>
                   <Ionicons name="calendar" size={20} color="#6366F1" />
                 </View>
-                <Text style={styles.statNumber}>{quickStats.totalEvents}</Text>
+                <Text style={styles.statNumber}>{realQuickStats.totalEvents}</Text>
                 <Text style={styles.statLabel}>Events</Text>
-                <Text style={styles.statSubtext}>Total</Text>
+                <Text style={styles.statSubtext}>Today</Text>
               </View>
             </View>
           </View>
@@ -296,7 +470,7 @@ const HomeScreen: React.FC = () => {
             </View>
             <View style={styles.scheduleContainer}>
               {todayEvents.length > 0 ? (
-                todayEvents.map((event, index) => (
+                todayEvents.map((event) => (
                   <View key={event.id} style={styles.eventCard}>
                     <View style={styles.eventIcon}>
                       {getEventIcon(event.type)}
@@ -767,6 +941,54 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#EF4444',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContent: {
+    alignItems: 'center',
+  },
+  loadingSpinner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+    borderTopColor: '#6366F1',
+    marginBottom: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  expensesCard: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  expensesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  expensesContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  visibilityToggle: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 36,
+    minHeight: 36,
   },
 });
 

@@ -1,3 +1,6 @@
+import moment from "moment";
+import apiClient from "../api/client";
+
 export interface Expense {
   id: string;
   amount: number;
@@ -168,11 +171,13 @@ class ExpenseService {
         category: expenseData.category,
         description: expenseData.description,
         date: expenseData.date,
-        receiptUri: expenseData.receiptUri,
-        calendarEventId: expenseData.calendarEventId,
         userId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        ...(expenseData.receiptUri && { receiptUri: expenseData.receiptUri }),
+        ...(expenseData.calendarEventId && {
+          calendarEventId: expenseData.calendarEventId,
+        }),
       };
 
       this.expenses.push(newExpense);
@@ -293,10 +298,18 @@ class ExpenseService {
    */
   async getCategories(): Promise<ExpenseCategory[]> {
     try {
-      return this.categories;
+      const response = await apiClient.get("/expenses/categories");
+
+      if (!response || !response.data) {
+        // Fallback to local categories if API fails
+        return this.categories;
+      }
+
+      return response.data;
     } catch (error) {
       console.error("Failed to get categories:", error);
-      throw new Error("Failed to load categories");
+      // Fallback to local categories if API fails
+      return this.categories;
     }
   }
 
@@ -466,6 +479,262 @@ class ExpenseService {
     } catch (error) {
       console.error("Failed to get recent expenses:", error);
       throw new Error("Failed to load recent expenses");
+    }
+  }
+
+  /**
+   * Find all expenses by user with query parameters
+   */
+  async findAllByUser(query: any = {}): Promise<{
+    expenses: Expense[];
+    total: number;
+    page?: number;
+    limit?: number;
+    totalPages?: number;
+  }> {
+    try {
+      console.log("query ===>", query);
+
+      const response = await apiClient.get("/expenses", {
+        params: {
+          ...query,
+        },
+      });
+
+      console.log("Response: => ", response);
+
+      if (!response) {
+        throw new Error("Failed to find expenses");
+      }
+
+      console.log("Response.data ===>", response.data);
+
+      // Handle the backend response format (based on your provided response)
+      return {
+        expenses: response.data || [],
+        total: response.data.total || 0,
+        page: response.data.page,
+        limit: response.data.limit,
+        totalPages: response.data.totalPages,
+      };
+    } catch (error) {
+      console.error("Failed to find expenses by user:", error);
+      throw new Error("Failed to load expenses");
+    }
+  }
+
+  /**
+   * Find expense by ID with user validation
+   */
+  async findById(id: string, userId: string): Promise<Expense> {
+    try {
+      const response = await apiClient.get(`/expenses/${id}`);
+
+      if (!response || !response.data) {
+        throw new Error("Expense not found");
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error("Failed to find expense by ID:", error);
+      throw new Error("Failed to load expense");
+    }
+  }
+
+  /**
+   * Find expenses by category
+   */
+  async findByCategory(userId: string, category: string): Promise<Expense[]> {
+    try {
+      const response = await apiClient.get(
+        `/expenses/by-category/${encodeURIComponent(category)}`
+      );
+
+      if (!response || !response.data) {
+        return [];
+      }
+
+      return response.data.expenses || [];
+    } catch (error) {
+      console.error("Failed to find expenses by category:", error);
+      throw new Error("Failed to load expenses by category");
+    }
+  }
+
+  /**
+   * Find expenses by date range
+   */
+  async findByDateRange(
+    userId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<Expense[]> {
+    try {
+      const startDateStr = startDate.toISOString().split("T")[0];
+      const endDateStr = endDate.toISOString().split("T")[0];
+
+      const response = await apiClient.get(
+        `/expenses/date-range/${startDateStr}/${endDateStr}`
+      );
+
+      if (!response || !response.data) {
+        return [];
+      }
+
+      return response.data.expenses || [];
+    } catch (error) {
+      console.error("Failed to find expenses by date range:", error);
+      throw new Error("Failed to load expenses by date range");
+    }
+  }
+
+  /**
+   * Create new expense (updated to match controller interface)
+   */
+  async create(expenseData: ExpenseFormData, userId: string): Promise<Expense> {
+    try {
+      const newExpense = {
+        amount: parseFloat(expenseData.amount),
+        category: expenseData.category,
+        description: expenseData.description,
+        date: expenseData.date,
+        ...(expenseData.receiptUri && { receiptUri: expenseData.receiptUri }),
+        ...(expenseData.calendarEventId && {
+          calendarEventId: expenseData.calendarEventId,
+        }),
+      };
+
+      console.log("New expense:", newExpense);
+
+      // Add api call to create expense
+      const response = await apiClient.post("/expenses", newExpense);
+
+      console.log("Response: => ", response);
+      if (!response) {
+        throw new Error("Failed to create expense");
+      }
+
+      console.log("Created expense:", response);
+
+      // Add expense to local expenses
+      this.expenses.push(response.data as Expense);
+
+      const expenseResponse = response.data as Expense;
+      return expenseResponse;
+    } catch (error) {
+      console.error("Failed to create expense:", error);
+      throw new Error("Failed to create expense");
+    }
+  }
+
+  /**
+   * Update expense (updated to match controller interface)
+   */
+  async update(
+    id: string,
+    expenseData: Partial<ExpenseFormData>,
+    userId: string
+  ): Promise<Expense> {
+    try {
+      const updateData = {
+        ...(expenseData.amount && { amount: parseFloat(expenseData.amount) }),
+        ...(expenseData.category && { category: expenseData.category }),
+        ...(expenseData.description && {
+          description: expenseData.description,
+        }),
+        ...(expenseData.date && { date: expenseData.date }),
+        ...(expenseData.receiptUri !== undefined && {
+          receiptUri: expenseData.receiptUri,
+        }),
+        ...(expenseData.calendarEventId !== undefined && {
+          calendarEventId: expenseData.calendarEventId,
+        }),
+      };
+
+      const response = await apiClient.patch(`/expenses/${id}`, updateData);
+
+      if (!response || !response.data) {
+        throw new Error("Failed to update expense");
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error("Failed to update expense:", error);
+      throw new Error("Failed to update expense");
+    }
+  }
+
+  /**
+   * Delete expense (updated to match controller interface)
+   */
+  async delete(id: string): Promise<void> {
+    try {
+      const response = await apiClient.delete(`/expenses/${id}`);
+
+      console.log("Response: => ", response);
+
+      if (response) {
+        throw new Error("Failed to delete expense");
+      }
+    } catch (error) {
+      console.error("Failed to delete expense:", error);
+      throw new Error("Failed to delete expense");
+    }
+  }
+
+  /**
+   * Get expense statistics with optional date range
+   */
+  async getStats(startDate?: string, endDate?: string): Promise<any> {
+    // ExpenseStats & {
+    //   currentPeriod: ExpenseStats;
+    //   previousPeriod?: ExpenseStats;
+    //   growthRate?: number;
+    // }
+    try {
+      const params = new URLSearchParams();
+      if (startDate) {
+        // Validate and format the provided start date
+        const validStartDate = new Date(startDate);
+        if (isNaN(validStartDate.getTime())) {
+          throw new Error("Invalid start date provided");
+        }
+        params.append("startDate", validStartDate.toISOString());
+      } else {
+        // Default to start of current day
+        params.append("startDate", moment().startOf("day").toISOString());
+      }
+
+      if (endDate) {
+        // Validate and format the provided end date
+        const validEndDate = new Date(endDate);
+        if (isNaN(validEndDate.getTime())) {
+          throw new Error("Invalid end date provided");
+        }
+        params.append("endDate", validEndDate.toISOString());
+      } else {
+        // Default to end of current day
+        params.append("endDate", moment().endOf("day").toISOString());
+      }
+
+      const url = `/expenses/stats${
+        params.toString() ? `?${params.toString()}` : ""
+      }`;
+
+      console.log("URL: => ", url);
+
+      const response = await apiClient.get(url);
+
+      console.log("Response Stats: => ", response);
+
+      if (!response) {
+        throw new Error("Failed to get stats");
+      }
+
+      return response;
+    } catch (error) {
+      console.error("Failed to get expense stats:", error);
+      throw new Error("Failed to load expense statistics");
     }
   }
 }

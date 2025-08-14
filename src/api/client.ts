@@ -56,13 +56,16 @@ class ApiClient {
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
       async (config) => {
+        console.log("Requesting => ", config.url);
         const token = await this.getAccessToken();
         if (token) {
+          console.log("Adding token => ", token);
           config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
       },
       (error) => {
+        console.log("Error => ", error);
         return Promise.reject(error);
       }
     );
@@ -70,33 +73,46 @@ class ApiClient {
     // Response interceptor to handle token refresh
     this.client.interceptors.response.use(
       (response: AxiosResponse) => {
+        console.log("Response => ", response);
         return response;
       },
       async (error: AxiosError) => {
+        console.log("Axios Error => ", error);
         const originalRequest = error.config as any;
 
         if (
           error.response?.status === HTTP_STATUS.UNAUTHORIZED &&
           !originalRequest._retry
         ) {
-          if (this.isRefreshing) {
-            return new Promise((resolve, reject) => {
-              this.failedQueue.push({ resolve, reject });
-            })
-              .then((token) => {
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-                return this.client(originalRequest);
-              })
-              .catch((err) => {
-                return Promise.reject(err);
-              });
-          }
+          // if (this.isRefreshing) {
+          //   console.log("Refreshing token");
+          //   // return new Promise((resolve, reject) => {
+          //   //   this.failedQueue.push({ resolve, reject });
+          //   // })
+          //   //   .then((token) => {
+          //   //     console.log("Token => ", token);
+          //   //     originalRequest.headers.Authorization = `Bearer ${token}`;
+          //   //     return this.client(originalRequest);
+          //   //   })
+          //   //   .catch((err) => {
+          //   //     console.log("Erroro => ", err);
+          //   //     return Promise.reject(err);
+          //   //   });
+          //   const refreshToken = await this.getRefreshToken();
+          //   if (!refreshToken) {
+          //     throw new Error("No refresh token available");
+          //   }
+          //   const getnewTokens = await this.refreshAuthToken(refreshToken);
+          //   console.log("New tokens => ", getnewTokens);
+          //   return getnewTokens;
+          // }
 
-          originalRequest._retry = true;
-          this.isRefreshing = true;
+          // originalRequest._retry = true;
+          // this.isRefreshing = true;
 
           try {
             const refreshToken = await this.getRefreshToken();
+            console.log("Refresho token => ", refreshToken);
             if (!refreshToken) {
               throw new Error("No refresh token available");
             }
@@ -104,29 +120,27 @@ class ApiClient {
             const response = await this.refreshAuthToken(refreshToken);
             const { accessToken } = response.data.data;
 
+            console.log("New Access token => ", accessToken);
+
             await this.setAccessToken(accessToken);
             this.client.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
-
-            // Process failed queue
-            this.failedQueue.forEach(({ resolve }) => {
-              resolve(accessToken);
-            });
-            this.failedQueue = [];
 
             return this.client(originalRequest);
           } catch (refreshError) {
             // Clear tokens and redirect to login
-            await this.clearTokens();
-            this.failedQueue.forEach(({ reject }) => {
-              reject(refreshError);
-            });
-            this.failedQueue = [];
+            // await this.clearTokens();
+            // this.failedQueue.forEach(({ reject }) => {
+            //   reject(refreshError);
+            // });
+            // this.failedQueue = [];
 
             throw refreshError;
           } finally {
             this.isRefreshing = false;
           }
         }
+
+        console.log("error => ", error);
 
         return Promise.reject(this.handleError(error));
       }
@@ -181,7 +195,10 @@ class ApiClient {
   // Token management
   private async getAccessToken(): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
+      console.log("Getting access token from secure store");
+      const token = await SecureStore.getItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
+      console.log("Access token => ", token);
+      return token;
     } catch (error) {
       console.error("Error getting access token:", error);
       return null;
@@ -190,7 +207,9 @@ class ApiClient {
 
   private async getRefreshToken(): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+      const token = await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+      console.log("Refresh token => ", token);
+      return token;
     } catch (error) {
       console.error("Error getting refresh token:", error);
       return null;

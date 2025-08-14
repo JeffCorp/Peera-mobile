@@ -20,14 +20,14 @@ export const RegisterScreen: React.FC = () => {
   const { register, isLoading, clearError } = useAuth();
 
   const [formData, setFormData] = useState({
-    name: '',
+    fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
   });
 
   const [errors, setErrors] = useState<{
-    name?: string;
+    fullName?: string;
     email?: string;
     password?: string;
     confirmPassword?: string;
@@ -37,9 +37,9 @@ export const RegisterScreen: React.FC = () => {
     const newErrors: { name?: string; email?: string; password?: string; confirmPassword?: string } = {};
 
     // Name validation
-    if (!formData.name.trim()) {
+    if (!formData.fullName.trim()) {
       newErrors.name = 'Full name is required';
-    } else if (formData.name.trim().length < 2) {
+    } else if (formData.fullName.trim().length < 2) {
       newErrors.name = 'Full name must be at least 2 characters';
     }
 
@@ -68,7 +68,7 @@ export const RegisterScreen: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleInputChange = (field: 'name' | 'email' | 'password' | 'confirmPassword', value: string) => {
+  const handleInputChange = (field: 'fullName' | 'email' | 'password' | 'confirmPassword', value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
 
     // Clear error when user starts typing
@@ -89,7 +89,7 @@ export const RegisterScreen: React.FC = () => {
 
     try {
       const result = await register({
-        name: formData.name.trim(),
+        fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         password: formData.password,
       });
@@ -138,9 +138,9 @@ export const RegisterScreen: React.FC = () => {
             <Input
               label="Full Name"
               placeholder="Enter your full name"
-              value={formData.name}
-              onChangeText={(value) => handleInputChange('name', value)}
-              error={errors.name}
+              value={formData.fullName}
+              onChangeText={(value) => handleInputChange('fullName', value)}
+              error={errors.fullName}
               autoCapitalize="words"
               autoCorrect={false}
               autoComplete="name"
