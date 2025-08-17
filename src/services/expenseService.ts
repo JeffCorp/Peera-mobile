@@ -14,6 +14,58 @@ export interface Expense {
   updatedAt: string;
 }
 
+export interface PlannedExpense {
+  id: string;
+  amount: number;
+  category: string;
+  description: string;
+  plannedDate: string;
+  priority: "low" | "medium" | "high";
+  isRecurring: boolean;
+  notes?: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePlannedExpenseDto {
+  amount: number;
+  category: string;
+  description: string;
+  plannedDate: string;
+  priority: "low" | "medium" | "high";
+  isRecurring?: boolean;
+  notes?: string;
+}
+
+export interface UpdatePlannedExpenseDto {
+  amount?: number;
+  category?: string;
+  description?: string;
+  plannedDate?: string;
+  priority?: "low" | "medium" | "high";
+  isRecurring?: boolean;
+  notes?: string;
+}
+
+export interface PlannedExpenseQueryDto {
+  startDate?: string;
+  endDate?: string;
+  category?: string;
+  priority?: string;
+  isRecurring?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+export interface PlannedExpenseStats {
+  totalPlannedAmount: number;
+  activePlannedAmount: number;
+  categoryTotals: { [category: string]: number };
+  priorityBreakdown: { [priority: string]: number };
+  upcomingPlannedExpenses: PlannedExpense[];
+}
+
 export interface ExpenseCategory {
   id: string;
   name: string;
@@ -735,6 +787,301 @@ class ExpenseService {
     } catch (error) {
       console.error("Failed to get expense stats:", error);
       throw new Error("Failed to load expense statistics");
+    }
+  }
+
+  // Planned Expense Methods
+
+  /**
+   * Create a new planned expense
+   */
+  async createPlannedExpense(
+    createPlannedExpenseDto: CreatePlannedExpenseDto,
+    userId: string
+  ): Promise<PlannedExpense[]> {
+    try {
+      const response = await apiClient.post("/expenses/planned", {
+        ...createPlannedExpenseDto,
+        userId,
+      });
+
+      if (!response || !response.data) {
+        throw new Error("Failed to create planned expense");
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error("Failed to create planned expense:", error);
+      throw new Error("Failed to create planned expense");
+    }
+  }
+
+  /**
+   * Find all planned expenses for a user with query parameters
+   */
+  async findAllPlannedExpensesByUser(
+    userId: string,
+    query: PlannedExpenseQueryDto = {}
+  ): Promise<{
+    plannedExpenses: PlannedExpense[];
+    total: number;
+    page?: number;
+    limit?: number;
+    totalPages?: number;
+  }> {
+    try {
+      const response = await apiClient.get("/expenses/planned", {
+        params: {
+          ...query,
+          userId,
+        },
+      });
+
+      if (!response || !response.data) {
+        throw new Error("Failed to find planned expenses");
+      }
+
+      return {
+        plannedExpenses: response.data.plannedExpenses || response.data || [],
+        total: response.data.total || 0,
+        page: response.data.page,
+        limit: response.data.limit,
+        totalPages: response.data.totalPages,
+      };
+    } catch (error) {
+      console.error("Failed to find planned expenses by user:", error);
+      throw new Error("Failed to load planned expenses");
+    }
+  }
+
+  /**
+   * Get planned expense statistics for a user
+   */
+  async getPlannedExpenseStats(userId: string): Promise<PlannedExpenseStats> {
+    try {
+      const response = await apiClient.get("/expenses/planned/stats", {
+        params: { userId },
+      });
+
+      if (!response || !response.data) {
+        throw new Error("Failed to get planned expense stats");
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error("Failed to get planned expense stats:", error);
+      throw new Error("Failed to load planned expense statistics");
+    }
+  }
+
+  /**
+   * Find a planned expense by ID with user validation
+   */
+  async findPlannedExpenseById(
+    id: string,
+    userId: string
+  ): Promise<PlannedExpense> {
+    try {
+      const response = await apiClient.get(`/expenses/planned/${id}`, {
+        params: { userId },
+      });
+
+      if (!response || !response.data) {
+        throw new Error("Planned expense not found");
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error("Failed to find planned expense by ID:", error);
+      throw new Error("Failed to load planned expense");
+    }
+  }
+
+  /**
+   * Update a planned expense
+   */
+  async updatePlannedExpense(
+    id: string,
+    updatePlannedExpenseDto: UpdatePlannedExpenseDto,
+    userId: string
+  ): Promise<PlannedExpense> {
+    try {
+      const response = await apiClient.patch(`/expenses/planned/${id}`, {
+        ...updatePlannedExpenseDto,
+        userId,
+      });
+
+      if (!response || !response.data) {
+        throw new Error("Failed to update planned expense");
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error("Failed to update planned expense:", error);
+      throw new Error("Failed to update planned expense");
+    }
+  }
+
+  /**
+   * Delete a planned expense
+   */
+  async deletePlannedExpense(id: string, userId: string): Promise<void> {
+    try {
+      await apiClient.delete(`/expenses/planned/${id}`, {
+        params: { userId },
+      });
+    } catch (error) {
+      console.error("Failed to delete planned expense:", error);
+      throw new Error("Failed to delete planned expense");
+    }
+  }
+
+  /**
+   * Get upcoming planned expenses for a user
+   */
+  async getUpcomingPlannedExpenses(
+    userId: string,
+    days: number = 30
+  ): Promise<PlannedExpense[]> {
+    try {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + days);
+
+      const response = await apiClient.get("/expenses/planned", {
+        params: {
+          userId,
+          startDate: new Date().toISOString(),
+          endDate: endDate.toISOString(),
+          isActive: true,
+        },
+      });
+
+      if (!response || !response.data) {
+        return [];
+      }
+
+      return response.data.plannedExpenses || response.data || [];
+    } catch (error) {
+      console.error("Failed to get upcoming planned expenses:", error);
+      throw new Error("Failed to load upcoming planned expenses");
+    }
+  }
+
+  /**
+   * Toggle recurring status of a planned expense
+   */
+  async togglePlannedExpenseRecurring(
+    id: string,
+    isRecurring: boolean,
+    userId: string
+  ): Promise<PlannedExpense> {
+    try {
+      const response = await apiClient.patch(`/expenses/planned/${id}`, {
+        isRecurring,
+        userId,
+      });
+
+      if (!response || !response.data) {
+        throw new Error("Failed to update planned expense recurring status");
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error(
+        "Failed to update planned expense recurring status:",
+        error
+      );
+      throw new Error("Failed to update planned expense recurring status");
+    }
+  }
+
+  /**
+   * Get planned expenses by priority
+   */
+  async getPlannedExpensesByPriority(
+    userId: string,
+    priority: "low" | "medium" | "high"
+  ): Promise<PlannedExpense[]> {
+    try {
+      const response = await apiClient.get("/expenses/planned", {
+        params: {
+          userId,
+          priority,
+          isRecurring: true,
+        },
+      });
+
+      if (!response || !response.data) {
+        return [];
+      }
+
+      return response.data.plannedExpenses || response.data || [];
+    } catch (error) {
+      console.error("Failed to get planned expenses by priority:", error);
+      throw new Error("Failed to load planned expenses by priority");
+    }
+  }
+
+  /**
+   * Get planned expenses by category
+   */
+  async getPlannedExpensesByCategory(
+    userId: string,
+    category: string
+  ): Promise<PlannedExpense[]> {
+    try {
+      const response = await apiClient.get("/expenses/planned", {
+        params: {
+          userId,
+          category,
+          isRecurring: true,
+        },
+      });
+
+      if (!response || !response.data) {
+        return [];
+      }
+
+      return response.data.plannedExpenses || response.data || [];
+    } catch (error) {
+      console.error("Failed to get planned expenses by category:", error);
+      throw new Error("Failed to load planned expenses by category");
+    }
+  }
+
+  /**
+   * Calculate total planned expenses for a date range
+   */
+  async calculatePlannedExpensesForRange(
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<number> {
+    try {
+      const response = await apiClient.get("/expenses/planned", {
+        params: {
+          userId,
+          startDate,
+          endDate,
+          isRecurring: true,
+        },
+      });
+
+      if (!response || !response.data) {
+        return 0;
+      }
+
+      const plannedExpenses =
+        response.data.plannedExpenses || response.data || [];
+      return plannedExpenses.reduce(
+        (total: number, expense: PlannedExpense) => {
+          return total + expense.amount;
+        },
+        0
+      );
+    } catch (error) {
+      console.error("Failed to calculate planned expenses for range:", error);
+      throw new Error("Failed to calculate planned expenses for range");
     }
   }
 }

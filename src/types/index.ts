@@ -123,6 +123,59 @@ export interface ExpenseFormErrors {
   date?: string;
 }
 
+// Planned Expense Types
+export interface PlannedExpense {
+  id: string;
+  amount: number;
+  category: string;
+  description: string;
+  plannedDate: string;
+  priority: "low" | "medium" | "high";
+  isRecurring: boolean;
+  notes?: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePlannedExpenseDto {
+  amount: number;
+  category: string;
+  description: string;
+  plannedDate: string;
+  priority: "low" | "medium" | "high";
+  isRecurring?: boolean;
+  notes?: string;
+}
+
+export interface UpdatePlannedExpenseDto {
+  amount?: number;
+  category?: string;
+  description?: string;
+  plannedDate?: string;
+  priority?: "low" | "medium" | "high";
+  isRecurring?: boolean;
+  notes?: string;
+}
+
+export interface PlannedExpenseQueryDto {
+  startDate?: string;
+  endDate?: string;
+  category?: string;
+  priority?: string;
+  isRecurring?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+export interface PlannedExpenseStats {
+  totalPlannedAmount: number;
+  activePlannedAmount: number;
+  categoryTotals: { [category: string]: number };
+  priorityBreakdown: { [priority: string]: number };
+  upcomingPlannedExpenses: PlannedExpense[];
+}
+
 // Calendar Types
 export interface CalendarEvent {
   id: string;
@@ -225,12 +278,15 @@ export interface AuthState {
 
 export interface ExpenseState {
   expenses: Expense[];
+  plannedExpenses: PlannedExpense[];
   categories: ExpenseCategory[];
   stats: ExpenseStats | null;
+  plannedExpenseStats: PlannedExpenseStats | null;
   filters: ExpenseFilters;
   isLoading: boolean;
   error: string | null;
   selectedExpense: Expense | null;
+  selectedPlannedExpense: PlannedExpense | null;
 }
 
 export interface CalendarState {

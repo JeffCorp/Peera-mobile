@@ -15,22 +15,11 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePlannedExpenses } from '../../hooks/usePlannedExpenses';
 import { Expense, ExpenseCategory, ExpenseFilters, ExpenseFormData, expenseService, ExpenseStats, FormErrors } from '../../services/expenseService';
 
-// New interfaces for planned expenses
-export interface PlannedExpense {
-  id: string;
-  amount: number;
-  category: string;
-  description: string;
-  plannedDate: string;
-  priority: 'low' | 'medium' | 'high';
-  isRecurring?: boolean;
-  notes?: string;
-  userId: string;
-  createdAt: string;
-  updatedAt: string;
-}
+// Import planned expense types from service
+import { CreatePlannedExpenseDto } from '../../services/expenseService';
 
 export interface PlannedExpenseFormData {
   amount: string;
@@ -69,9 +58,20 @@ const ExpensesScreen: React.FC = () => {
   const [selectedCategoryTab, setSelectedCategoryTab] = useState(0);
 
   // Planned expenses state
-  const [plannedExpenses, setPlannedExpenses] = useState<PlannedExpense[]>([]);
   const [showPlannedExpenses, setShowPlannedExpenses] = useState(false);
   const [showAddPlannedModal, setShowAddPlannedModal] = useState(false);
+
+  // Use the planned expenses hook
+  const {
+    plannedExpenses,
+    isLoading: plannedExpensesLoading,
+    error: plannedExpensesError,
+    getPlannedExpenses,
+    addPlannedExpense,
+    editPlannedExpense,
+    removePlannedExpense,
+    clearPlannedExpenseError,
+  } = usePlannedExpenses();
 
   // Add expense form state
   const [expenseForm, setExpenseForm] = useState<ExpenseFormData>({
@@ -152,48 +152,8 @@ const ExpensesScreen: React.FC = () => {
         expenseService.getStats(),
       ]);
 
-      // Mock planned expenses data (replace with API call later)
-      const mockPlannedExpenses: PlannedExpense[] = [
-        {
-          id: '1',
-          amount: 150,
-          category: 'Food',
-          description: 'Grocery shopping',
-          plannedDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          priority: 'high',
-          isRecurring: true,
-          notes: 'Weekly grocery run',
-          userId: user?.id || '1',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          amount: 80,
-          category: 'Transport',
-          description: 'Gas refill',
-          plannedDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          priority: 'medium',
-          isRecurring: false,
-          userId: user?.id || '1',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: '3',
-          amount: 200,
-          category: 'Entertainment',
-          description: 'Concert tickets',
-          plannedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          priority: 'low',
-          isRecurring: false,
-          notes: 'Save up for weekend concert',
-          userId: user?.id || '1',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ];
-      setPlannedExpenses(mockPlannedExpenses);
+      // Load planned expenses from API
+      getPlannedExpenses();
 
       console.log('expensesResponse ===>', expensesResponse);
 
@@ -319,6 +279,21 @@ const ExpensesScreen: React.FC = () => {
     loadData();
   }, [loadData]);
 
+  // Load planned expenses when component mounts or when switching to planned tab
+  useEffect(() => {
+    if (showPlannedExpenses) {
+      getPlannedExpenses();
+    }
+  }, [showPlannedExpenses, getPlannedExpenses]);
+
+  // Handle planned expense errors
+  useEffect(() => {
+    if (plannedExpensesError) {
+      Alert.alert('Error', plannedExpensesError);
+      clearPlannedExpenseError();
+    }
+  }, [plannedExpensesError, clearPlannedExpenseError]);
+
 
 
   useEffect(() => {
@@ -347,8 +322,6 @@ const ExpensesScreen: React.FC = () => {
       ]
     );
   };
-
-
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -389,7 +362,8 @@ const ExpensesScreen: React.FC = () => {
   };
 
   const calculatePlannedTotal = (): number => {
-    return plannedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    console.log('plannedExpenses ===>', plannedExpenses);
+    return plannedExpenses.filter(expense => expense !== undefined).reduce((sum, expense) => sum + Number(expense.amount), 0);
   };
 
   // Tab switching with animation
@@ -530,6 +504,7 @@ const ExpensesScreen: React.FC = () => {
     }
 
     return plannedExpenses
+      .filter(expense => expense !== undefined)
       .sort((a, b) => new Date(a.plannedDate).getTime() - new Date(b.plannedDate).getTime())
       .map((expense) => (
         <View key={expense.id} style={styles.plannedExpenseCard}>
@@ -604,7 +579,7 @@ const ExpensesScreen: React.FC = () => {
                       text: 'Delete',
                       style: 'destructive',
                       onPress: () => {
-                        setPlannedExpenses(prev => prev.filter(e => e.id !== expense.id));
+                        removePlannedExpense(expense.id);
                       },
                     },
                   ]
@@ -1166,6 +1141,202 @@ const ExpensesScreen: React.FC = () => {
     </Modal>
   );
 
+  const renderAddPlannedExpenseModal = () => (
+    <Modal
+      visible={showAddPlannedModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowAddPlannedModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add Planned Expense</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setShowAddPlannedModal(false);
+                resetPlannedForm();
+              }}
+              style={styles.modalCloseButton}
+            >
+              <Ionicons name="close" size={24} color="#6366F1" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {/* Amount Input */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Amount</Text>
+              <View style={styles.amountInputContainer}>
+                <Text style={styles.currencySymbol}>$</Text>
+                <TextInput
+                  style={[styles.formInput, styles.amountInput]}
+                  placeholder="0.00"
+                  placeholderTextColor="#9CA3AF"
+                  value={plannedExpenseForm.amount}
+                  onChangeText={(value) => setPlannedExpenseForm(prev => ({ ...prev, amount: value }))}
+                  keyboardType="numeric"
+                />
+              </View>
+              {plannedFormErrors.amount && (
+                <Text style={styles.errorText}>{plannedFormErrors.amount}</Text>
+              )}
+            </View>
+
+            {/* Description Input */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Description</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="What is this planned expense for?"
+                placeholderTextColor="#9CA3AF"
+                value={plannedExpenseForm.description}
+                onChangeText={(value) => setPlannedExpenseForm(prev => ({ ...prev, description: value }))}
+              />
+              {plannedFormErrors.description && (
+                <Text style={styles.errorText}>{plannedFormErrors.description}</Text>
+              )}
+            </View>
+
+            {/* Category Selection */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Category</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.categorySelection}
+              >
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.categoryOption,
+                      plannedExpenseForm.category === category.name && styles.categoryOptionActive,
+                    ]}
+                    onPress={() => setPlannedExpenseForm(prev => ({ ...prev, category: category.name }))}
+                  >
+                    <Text style={styles.categoryOptionIcon}>{category.icon}</Text>
+                    <Text style={[
+                      styles.categoryOptionText,
+                      plannedExpenseForm.category === category.name && styles.categoryOptionTextActive,
+                    ]}>
+                      {category.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {plannedFormErrors.category && (
+                <Text style={styles.errorText}>{plannedFormErrors.category}</Text>
+              )}
+            </View>
+
+            {/* Planned Date Input */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Planned Date</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#9CA3AF"
+                value={plannedExpenseForm.plannedDate}
+                onChangeText={(value) => setPlannedExpenseForm(prev => ({ ...prev, plannedDate: value }))}
+              />
+              {plannedFormErrors.plannedDate && (
+                <Text style={styles.errorText}>{plannedFormErrors.plannedDate}</Text>
+              )}
+            </View>
+
+            {/* Priority Selection */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Priority</Text>
+              <View style={styles.prioritySelection}>
+                {['low', 'medium', 'high'].map((priority) => (
+                  <TouchableOpacity
+                    key={priority}
+                    style={[
+                      styles.priorityOption,
+                      plannedExpenseForm.priority === priority && styles.priorityOptionActive,
+                    ]}
+                    onPress={() => setPlannedExpenseForm(prev => ({ ...prev, priority: priority as 'low' | 'medium' | 'high' }))}
+                  >
+                    <Text style={[
+                      styles.priorityOptionText,
+                      plannedExpenseForm.priority === priority && styles.priorityOptionTextActive,
+                    ]}>
+                      {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Recurring Toggle */}
+            <View style={styles.formGroup}>
+              <View style={styles.toggleContainer}>
+                <Text style={styles.formLabel}>Recurring Expense</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    plannedExpenseForm.isRecurring && styles.toggleButtonActive,
+                  ]}
+                  onPress={() => setPlannedExpenseForm(prev => ({ ...prev, isRecurring: !prev.isRecurring }))}
+                >
+                  <Text style={styles.toggleText}>
+                    {plannedExpenseForm.isRecurring ? 'Yes' : 'No'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Notes Input */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Notes (Optional)</Text>
+              <TextInput
+                style={[styles.formInput, styles.notesInput]}
+                placeholder="Add any additional notes..."
+                placeholderTextColor="#9CA3AF"
+                value={plannedExpenseForm.notes}
+                onChangeText={(value) => setPlannedExpenseForm(prev => ({ ...prev, notes: value }))}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={async () => {
+                try {
+                  // Create the planned expense using the API
+                  const plannedExpenseData: CreatePlannedExpenseDto = {
+                    amount: parseFloat(plannedExpenseForm.amount) || 0,
+                    category: plannedExpenseForm.category,
+                    description: plannedExpenseForm.description,
+                    plannedDate: plannedExpenseForm.plannedDate,
+                    priority: plannedExpenseForm.priority,
+                    isRecurring: plannedExpenseForm.isRecurring || false,
+                    notes: plannedExpenseForm.notes || '',
+                  };
+
+                  console.log("plannedExpenseData", plannedExpenseData);
+
+                  await addPlannedExpense(plannedExpenseData);
+                  setShowAddPlannedModal(false);
+                  resetPlannedForm();
+                  Alert.alert('Success', 'Planned expense added successfully!');
+                } catch (error) {
+                  console.error('Failed to add planned expense:', error);
+                  Alert.alert('Error', 'Failed to add planned expense');
+                }
+              }}
+            >
+              <Text style={styles.submitButtonText}>Add Planned Expense</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -1391,6 +1562,9 @@ const ExpensesScreen: React.FC = () => {
 
           {/* Add Expense Modal */}
           {renderAddExpenseModal()}
+
+          {/* Add Planned Expense Modal */}
+          {renderAddPlannedExpenseModal()}
 
           {/* Stats Modals */}
           {renderTotalSpentModal()}
@@ -2438,6 +2612,120 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 8,
+  },
+  notesInput: {
+    height: 100,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  toggleButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  toggleButtonActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.5)',
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  prioritySelection: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  priorityOption: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  priorityOptionActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.5)',
+  },
+  priorityOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  priorityOptionTextActive: {
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  frequencySelection: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  frequencyOption: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    minWidth: 70,
+  },
+  frequencyOptionActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.5)',
+  },
+  frequencyOptionText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  frequencyOptionTextActive: {
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  frequencyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  frequencyText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6366F1',
+  },
+  activeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    gap: 4,
+  },
+  activeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
   },
 });
 

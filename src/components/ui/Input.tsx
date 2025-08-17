@@ -19,6 +19,7 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
   errorStyle?: TextStyle;
   helperStyle?: TextStyle;
   testID?: string;
+  prefix?: string;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -31,6 +32,7 @@ export const Input: React.FC<InputProps> = ({
   errorStyle,
   helperStyle,
   testID,
+  prefix,
   ...textInputProps
 }) => {
   const [isFocused, setIsFocused] = useState(false);
@@ -53,18 +55,23 @@ export const Input: React.FC<InputProps> = ({
         </Text>
       )}
 
-      <TextInput
-        {...textInputProps}
-        style={[
-          styles.input,
-          isFocused && styles.inputFocused,
-          error && styles.inputError,
-          inputStyle,
-        ]}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        placeholderTextColor="#6B7280"
-      />
+      <View style={styles.inputContainer}>
+        {prefix && (
+          <Text style={styles.prefix}>{prefix}</Text>
+        )}
+        <TextInput
+          {...textInputProps}
+          style={[
+            styles.input,
+            isFocused && styles.inputFocused,
+            error && styles.inputError,
+            inputStyle,
+          ]}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholderTextColor="#6B7280"
+        />
+      </View>
 
       {error && (
         <Text style={[styles.errorText, errorStyle]}>
@@ -100,6 +107,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     color: '#FFFFFF',
+    width: '100%',
   },
   inputFocused: {
     borderColor: '#6366F1',
@@ -118,5 +126,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginTop: 6,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  prefix: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginRight: 8,
   },
 }); 

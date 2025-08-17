@@ -27,8 +27,8 @@ const AddExpenseScreen: React.FC = () => {
     category: '',
     description: '',
     date: new Date().toISOString().split('T')[0],
-    receiptUri: undefined,
-    calendarEventId: undefined,
+    receiptUri: '',
+    calendarEventId: '',
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
@@ -69,7 +69,7 @@ const AddExpenseScreen: React.FC = () => {
       const dateString = selectedDate.toISOString().split('T')[0];
       setFormData(prev => ({ ...prev, date: dateString }));
       if (formErrors.date) {
-        setFormErrors(prev => ({ ...prev, date: undefined }));
+        setFormErrors(prev => ({ ...prev, date: '' }));
       }
     }
   };
@@ -83,7 +83,7 @@ const AddExpenseScreen: React.FC = () => {
     setFormData(prev => ({ ...prev, category: category.name }));
     setShowCategoryModal(false);
     if (formErrors.category) {
-      setFormErrors(prev => ({ ...prev, category: undefined }));
+      setFormErrors(prev => ({ ...prev, category: '' }));
     }
   };
 
@@ -114,7 +114,7 @@ const AddExpenseScreen: React.FC = () => {
   };
 
   const handleRemoveReceipt = () => {
-    setFormData(prev => ({ ...prev, receiptUri: undefined }));
+    setFormData(prev => ({ ...prev, receiptUri: '' }));
   };
 
   const validateForm = (): boolean => {
