@@ -9,11 +9,12 @@ export type AuthStackParamList = {
 
 // Main Tab Types
 export type MainTabParamList = {
-  Home: undefined;
-  Calendar: undefined;
-  Voice: undefined;
-  Expenses: undefined;
-  Profile: undefined;
+  home: undefined;
+  calendar: undefined;
+  voice: undefined;
+  chat: undefined;
+  expenses: undefined;
+  profile: undefined;
 };
 
 // Home Stack Types

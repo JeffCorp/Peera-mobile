@@ -5,8 +5,6 @@ export { LoadingScreen } from "./components/ui/LoadingScreen";
 
 // Navigation Components
 export { default as TabBarIcon } from "./components/navigation/TabBarIcon";
-export { default as MainTabNavigator } from "./navigation/MainTabNavigator";
-export { default as RootNavigator } from "./navigation/RootNavigator";
 
 // Services
 export { apiService } from "./services/api";

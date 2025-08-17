@@ -16,10 +16,10 @@ import {
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlannedExpenses } from '../../hooks/usePlannedExpenses';
-import { Expense, ExpenseCategory, ExpenseFilters, ExpenseFormData, expenseService, ExpenseStats, FormErrors } from '../../services/expenseService';
+import { CreatePlannedExpenseDto, Expense, ExpenseCategory, ExpenseFilters, ExpenseFormData, expenseService, ExpenseStats, FormErrors, PlannedExpense } from '../../services/expenseService';
 
 // Import planned expense types from service
-import { CreatePlannedExpenseDto } from '../../services/expenseService';
+
 
 export interface PlannedExpenseFormData {
   amount: string;
@@ -60,6 +60,10 @@ const ExpensesScreen: React.FC = () => {
   // Planned expenses state
   const [showPlannedExpenses, setShowPlannedExpenses] = useState(false);
   const [showAddPlannedModal, setShowAddPlannedModal] = useState(false);
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [selectedExpenseForConversion, setSelectedExpenseForConversion] = useState<PlannedExpense | null>(null);
+  const [conversionDate, setConversionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [conversionNotes, setConversionNotes] = useState('');
 
   // Use the planned expenses hook
   const {
@@ -70,6 +74,7 @@ const ExpensesScreen: React.FC = () => {
     addPlannedExpense,
     editPlannedExpense,
     removePlannedExpense,
+    convertPlannedExpenseToActual,
     clearPlannedExpenseError,
   } = usePlannedExpenses();
 
@@ -551,8 +556,8 @@ const ExpensesScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => {
-                // Convert to actual expense functionality
-                Alert.alert('Convert to Expense', 'Convert this planned expense to an actual expense?');
+                setSelectedExpenseForConversion(expense);
+                setShowConvertModal(true);
               }}
             >
               <Ionicons name="checkmark-circle-outline" size={16} color="#10B981" />
@@ -1337,6 +1342,115 @@ const ExpensesScreen: React.FC = () => {
     </Modal>
   );
 
+  const renderConvertModal = () => (
+    <Modal
+      visible={showConvertModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowConvertModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Convert to Actual Expense</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setShowConvertModal(false);
+                setSelectedExpenseForConversion(null);
+                setConversionDate(new Date().toISOString().split('T')[0]);
+                setConversionNotes('');
+              }}
+              style={styles.modalCloseButton}
+            >
+              <Ionicons name="close" size={24} color="#6366F1" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {selectedExpenseForConversion && (
+              <>
+                {/* Expense Info */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Planned Expense</Text>
+                  <View style={styles.expenseCard}>
+                    <Text style={styles.expenseDescription}>
+                      {selectedExpenseForConversion.description}
+                    </Text>
+                    <Text style={styles.expenseAmount}>
+                      {expenseService.formatCurrency(selectedExpenseForConversion.amount)}
+                    </Text>
+                    <Text style={styles.expenseDate}>
+                      {getCategoryIcon(selectedExpenseForConversion.category)} {selectedExpenseForConversion.category}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Actual Date Input */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Actual Date</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#9CA3AF"
+                    value={conversionDate}
+                    onChangeText={setConversionDate}
+                  />
+                </View>
+
+                {/* Notes Input */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Additional Notes (Optional)</Text>
+                  <TextInput
+                    style={[styles.formInput, styles.notesInput]}
+                    placeholder="Add any additional notes for the actual expense..."
+                    placeholderTextColor="#9CA3AF"
+                    value={conversionNotes}
+                    onChangeText={setConversionNotes}
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+
+                {/* Convert Button */}
+                <TouchableOpacity
+                  style={styles.submitButton}
+                  onPress={async () => {
+                    try {
+                      const convertDto = {
+                        plannedExpenseId: selectedExpenseForConversion.id,
+                        actualDate: conversionDate,
+                        notes: conversionNotes || selectedExpenseForConversion.notes || '',
+                      };
+
+                      await convertPlannedExpenseToActual(convertDto, user?.id || '1');
+                      setShowConvertModal(false);
+                      setSelectedExpenseForConversion(null);
+                      setConversionDate(new Date().toISOString().split('T')[0]);
+                      setConversionNotes('');
+
+                      // Refresh both expenses and planned expenses
+                      await loadData();
+
+                      // Also refresh planned expenses specifically
+                      getPlannedExpenses();
+
+                      Alert.alert('Success', 'Planned expense converted to actual expense!');
+                    } catch (error) {
+                      console.error('Failed to convert planned expense:', error);
+                      Alert.alert('Error', 'Failed to convert planned expense');
+                    }
+                  }}
+                >
+                  <Text style={styles.submitButtonText}>Convert to Actual Expense</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -1422,6 +1536,8 @@ const ExpensesScreen: React.FC = () => {
                 {plannedExpenses.length} planned
               </Text>
             </TouchableOpacity>
+
+
           </View>
 
           {/* Search and Filters */}
@@ -1502,22 +1618,32 @@ const ExpensesScreen: React.FC = () => {
               ]}
             >
               {/* Stats */}
-              {!showPlannedExpenses && renderStats()}
+              {!showPlannedExpenses && (
+                <>
+                  {renderStats()}
+
+
+                </>
+              )}
 
               {/* Planned Expenses Summary */}
               {showPlannedExpenses && (
-                <View style={styles.plannedSummaryContainer}>
-                  <Text style={styles.plannedSummaryTitle}>📅 Planning Summary</Text>
-                  <View style={styles.plannedSummaryCard}>
-                    <Text style={styles.plannedTotalAmount}>
-                      {expenseService.formatCurrency(calculatePlannedTotal())}
-                    </Text>
-                    <Text style={styles.plannedTotalLabel}>Total Planned</Text>
-                    <Text style={styles.plannedTotalSubtext}>
-                      {plannedExpenses.length} upcoming expenses
-                    </Text>
+                <>
+                  <View style={styles.plannedSummaryContainer}>
+                    <Text style={styles.plannedSummaryTitle}>📅 Planning Summary</Text>
+                    <View style={styles.plannedSummaryCard}>
+                      <Text style={styles.plannedTotalAmount}>
+                        {expenseService.formatCurrency(calculatePlannedTotal())}
+                      </Text>
+                      <Text style={styles.plannedTotalLabel}>Total Planned</Text>
+                      <Text style={styles.plannedTotalSubtext}>
+                        {plannedExpenses.length} upcoming expenses
+                      </Text>
+                    </View>
                   </View>
-                </View>
+
+
+                </>
               )}
 
               {/* Content List */}
@@ -1566,12 +1692,19 @@ const ExpensesScreen: React.FC = () => {
           {/* Add Planned Expense Modal */}
           {renderAddPlannedExpenseModal()}
 
+          {/* Convert Planned Expense Modal */}
+          {renderConvertModal()}
+
+
+
           {/* Stats Modals */}
           {renderTotalSpentModal()}
           {renderExpensesCountModal()}
           {renderAverageModal()}
           {renderCategoriesModal()}
         </Animated.View>
+
+
       </SafeAreaView>
     </View>
   );
@@ -1638,6 +1771,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginBottom: 20,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   headerContent: {
     flex: 1,
   },
@@ -1652,6 +1790,7 @@ const styles = StyleSheet.create({
     color: '#6366F1',
     fontWeight: '500',
   },
+
   addButton: {
     backgroundColor: 'rgba(99, 102, 241, 0.8)',
     borderRadius: 12,
@@ -2503,6 +2642,8 @@ const styles = StyleSheet.create({
   tabSubtextActive: {
     color: '#8B5CF6',
   },
+
+
   plannedSummaryContainer: {
     marginBottom: 20,
   },
@@ -2727,6 +2868,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#10B981',
   },
+
 });
 
 export default ExpensesScreen; 

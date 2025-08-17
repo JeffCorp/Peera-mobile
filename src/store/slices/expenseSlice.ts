@@ -2,6 +2,7 @@ import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { apiClient } from "../../api/client";
 import { API_ENDPOINTS } from "../../config/env";
 import {
+  ConvertPlannedExpenseDto,
   CreatePlannedExpenseDto,
   Expense,
   ExpenseCategory,
@@ -221,6 +222,29 @@ export const deletePlannedExpense = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(
         error.message || "Failed to delete planned expense"
+      );
+    }
+  }
+);
+
+export const convertPlannedExpense = createAsyncThunk(
+  "expenses/convertPlannedExpense",
+  async (
+    {
+      convertDto,
+      userId,
+    }: { convertDto: ConvertPlannedExpenseDto; userId: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await apiClient.post(
+        `${API_ENDPOINTS.EXPENSES}/planned/convert`,
+        convertDto
+      );
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(
+        error.message || "Failed to convert planned expense"
       );
     }
   }
@@ -494,6 +518,28 @@ const expenseSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchPlannedExpenseStats.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      });
+
+    // Convert Planned Expense
+    builder
+      .addCase(convertPlannedExpense.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(convertPlannedExpense.fulfilled, (state, action) => {
+        state.isLoading = false;
+        // Add the new actual expense to the expenses list
+        state.expenses.unshift(action.payload.expense);
+        // Remove the planned expense from the planned expenses list
+        state.plannedExpenses = state.plannedExpenses.filter(
+          (plannedExpense) =>
+            plannedExpense.id !== action.payload.plannedExpense.id
+        );
+        state.error = null;
+      })
+      .addCase(convertPlannedExpense.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       });

@@ -158,6 +158,14 @@ export interface UpdatePlannedExpenseDto {
   notes?: string;
 }
 
+export interface ConvertPlannedExpenseDto {
+  plannedExpenseId: string;
+  actualDate: string;
+  receiptUri?: string;
+  calendarEventId?: string;
+  notes?: string;
+}
+
 export interface PlannedExpenseQueryDto {
   startDate?: string;
   endDate?: string;

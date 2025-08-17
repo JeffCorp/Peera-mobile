@@ -48,6 +48,14 @@ export interface UpdatePlannedExpenseDto {
   notes?: string;
 }
 
+export interface ConvertPlannedExpenseDto {
+  plannedExpenseId: string;
+  actualDate: string;
+  receiptUri?: string;
+  calendarEventId?: string;
+  notes?: string;
+}
+
 export interface PlannedExpenseQueryDto {
   startDate?: string;
   endDate?: string;
@@ -992,6 +1000,33 @@ class ExpenseService {
         error
       );
       throw new Error("Failed to update planned expense recurring status");
+    }
+  }
+
+  /**
+   * Convert a planned expense to an actual expense
+   */
+  async convertPlannedExpenseToActual(
+    convertDto: ConvertPlannedExpenseDto,
+    userId: string
+  ): Promise<{ expense: Expense; plannedExpense: PlannedExpense }> {
+    try {
+      const response = await apiClient.post("/expenses/planned/convert", {
+        ...convertDto,
+        userId,
+      });
+
+      if (!response || !response.data) {
+        throw new Error("Failed to convert planned expense to actual expense");
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error(
+        "Failed to convert planned expense to actual expense:",
+        error
+      );
+      throw new Error("Failed to convert planned expense to actual expense");
     }
   }
 

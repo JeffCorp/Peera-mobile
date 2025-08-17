@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
+  ConvertPlannedExpenseDto,
   CreatePlannedExpenseDto,
   PlannedExpense,
   PlannedExpenseQueryDto,
@@ -9,6 +10,7 @@ import {
 import { RootState } from "../store";
 import {
   clearError,
+  convertPlannedExpense,
   createPlannedExpense,
   deletePlannedExpense,
   fetchPlannedExpenses,
@@ -55,6 +57,13 @@ export const usePlannedExpenses = () => {
     [dispatch]
   );
 
+  const convertPlannedExpenseToActual = useCallback(
+    (convertDto: ConvertPlannedExpenseDto, userId: string) => {
+      return dispatch(convertPlannedExpense({ convertDto, userId }));
+    },
+    [dispatch]
+  );
+
   const getPlannedExpenseStats = useCallback(() => {
     dispatch(fetchPlannedExpenseStats());
   }, [dispatch]);
@@ -83,6 +92,7 @@ export const usePlannedExpenses = () => {
     addPlannedExpense,
     editPlannedExpense,
     removePlannedExpense,
+    convertPlannedExpenseToActual,
     getPlannedExpenseStats,
     selectPlannedExpense,
     clearPlannedExpenseError,
